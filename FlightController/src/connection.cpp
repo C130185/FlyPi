@@ -12,8 +12,12 @@ using namespace std;
 Connection::Connection() {
 }
 
-void Connection::AddOnRecvListener(OnRecvListener listener) {
-	recv_listeners_.push_back(listener);
+void Connection::AddCtrlListener(CtrlListener listener) {
+	ctrl_listeners_.push_back(listener);
+}
+
+void Connection::AddCmdListener(CmdListener listener) {
+	cmd_listeners_.push_back(listener);
 }
 
 void Connection::AddErrorHandler(ErrorHandler handler) {

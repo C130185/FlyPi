@@ -9,8 +9,6 @@
 #define WIFI_CONNECTION_H_
 
 #include <thread>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 #include "connection.h"
 
@@ -31,6 +29,8 @@ private:
 	int sockfd_, port_;
 	char buffer_[kBufferLength];
 	std::thread recv_thread_;
+	CommandPacket cmdPacket_;
+	ControlPacket ctrlPacket_;
 
 	void DoRecv();
 	void HandleErrors(int errornum);

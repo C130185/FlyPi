@@ -7,13 +7,20 @@
 
 #include "wifi_connection.h"
 
+#include <asm-generic/socket.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <cerrno>
+#include <cstring>
 
 using namespace std;
 
 WifiConnection::WifiConnection(int port) :
-		state_(Created), port_(port), buffer_ { 0 } {
+				state_(Created),
+				port_(port),
+				buffer_ { 0 } {
 	sockfd_ = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd_ < 0) {
 		HandleErrors(errno);
@@ -59,8 +66,20 @@ void WifiConnection::DoRecv() {
 			HandleErrors(errno);
 			continue;
 		}
-		for (OnRecvListener listener : recv_listeners_) {
-			listener(buffer_, n);
+		char type = buffer_[8];
+		switch (type) {
+		case kPacketTypeCommand:
+			memcpy(&cmdPacket_, buffer_, sizeof(cmdPacket_));
+			for (CmdListener listener : cmd_listeners_) {
+				listener(cmdPacket_);
+			}
+			break;
+		case kPacketTypeControl:
+			memcpy(&ctrlPacket_, buffer_, sizeof(ctrlPacket_));
+			for (CtrlListener listener : ctrl_listeners_) {
+				listener(ctrlPacket_);
+			}
+			break;
 		}
 	}
 	close(sockfd_);

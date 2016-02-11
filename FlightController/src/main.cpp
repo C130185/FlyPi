@@ -5,6 +5,7 @@
  *      Author: kp
  */
 
+#include <getopt.h>
 #include <imu.h>
 #include <ncurses.h>
 #include <pigpio.h>
@@ -19,6 +20,7 @@
 #include <string>
 #include <thread>
 
+#include "js_connection.h"
 #include "receiver.h"
 #include "ui.h"
 #include "wifi_connection.h"
@@ -37,15 +39,16 @@ static const float kMaxYaw = 45; // deg/s
 static const float kThrottleThreshold = 0.2; // m/s
 static const float kPThrotle = 0.2;
 static const float kDThrottle = 0.12;
-static const float kPRollPitch = 0.005;
-static const float kDRollPitch = 0.004;
+static const float kPRollPitch = 0.003;
+static const float kDRollPitch = 0.001;
 static const float kPYaw = 0.001;
 
+bool js_mode_ = false;
 State state_ = STOP;
 array<short, 4> motor_gpio_ = { 23, 18, 15, 14 };
 array<float, 4> motor_speed_ = { 0, 0, 0, 0 };
 float hover_ = 0;
-Receiver receiver(unique_ptr<WifiConnection>(new WifiConnection(43123)));
+Receiver* receiver;
 IMU imu;
 float target_throttle_;
 float target_roll_;
@@ -53,6 +56,7 @@ float target_pitch_;
 float target_yaw_;
 
 void onexit() {
+	delete receiver;
 	UI::End();
 	gpioTerminate();
 }
@@ -72,7 +76,7 @@ void UILoop() {
 		oss << "Motor 4: " << motor_speed_[3] * 100 << "\n\n";
 
 		// print imu
-		array<float, 3> angular_pos = imu.get_angular_pos();
+		array<float, 3> angular_pos = imu.get_angular_velocity();
 		array<float, 3> linear_velocity = imu.get_lin_velocity();
 
 		oss << setw(COLS / 2) << "Angular Position (deg)";
@@ -129,33 +133,50 @@ void ResetMotors() {
 	gpioPWM(motor_gpio_[3], motor_speed_[3] * 1000 + 1000);
 }
 
-void OnCmdReceived(char cmd) {
-	switch (cmd) {
-	case Receiver::kCommandStart:
-		state_ = RUNNING;
-		UI::Print("Received START signal\n");
-		break;
-	case Receiver::kCommandStop:
-		state_ = STOP;
-		UI::Print("STOP signal received\n");
-		ResetMotors();
-		receiver.Reset();
-		UI::Print("Waiting for START signal\n");
-		break;
-	}
+void OnStart() {
+	state_ = RUNNING;
+	UI::Print("Received START signal\n");
+}
+
+void OnStop() {
+	state_ = STOP;
+	UI::Print("STOP signal received\n");
+	ResetMotors();
+	receiver->Reset();
+	UI::Print("Waiting for START signal\n");
 }
 
 void OnLostConn() {
 	if (state_ == RUNNING) {
 		UI::Print("E-STOP: Lost connection\n");
 		ResetMotors();
-		receiver.Reset();
+		receiver->Reset();
 		state_ = STOP;
 		UI::Print("Waiting for START signal\n");
 	}
 }
 
-int main() {
+void ParseArgs(int argc, char* argv[]) {
+	int c;
+	while ((c = getopt(argc, argv, "j")) != -1) {
+		switch (c) {
+		case 'j':
+			js_mode_ = true;
+			break;
+		}
+	}
+}
+
+int main(int argc, char* argv[]) {
+	ParseArgs(argc, argv);
+	if (js_mode_) {
+		receiver = new Receiver(unique_ptr<Connection>(new JSConnection()));
+	} else {
+		receiver = new Receiver(
+				unique_ptr<Connection>(new WifiConnection(43123)));
+	}
+
+	cout << "asd";
 	if (gpioInitialise() < 0) {
 		cout << "Error initializing gpio!" << endl;
 		return (-1);
@@ -194,9 +215,10 @@ int main() {
 	gpioPWM(motor_gpio_[2], 1000);
 	gpioPWM(motor_gpio_[3], 1000);
 
-	receiver.AddOnCmdListener(OnCmdReceived);
-	receiver.AddOnLostConnListener(OnLostConn);
-	receiver.Start();
+	receiver->AddStartCmdListener(&OnStart);
+	receiver->AddStopCmdListener(&OnStop);
+	receiver->AddLostConnListener(&OnLostConn);
+	receiver->Start();
 
 	auto cur_time = chrono::high_resolution_clock::now();
 	auto prev_time = cur_time;
@@ -221,10 +243,9 @@ int main() {
 				lin_accel[2] = 0;
 			}
 
-			if (abs(ang_pos[0]) > 5 || abs(ang_pos[1] > 5)
-					|| motor_speed_[0] > 0.5 || motor_speed_[1] > 0.5
-					|| motor_speed_[2] > 0.5 || motor_speed_[3] > 0.5) {
-				OnCmdReceived(Receiver::kCommandStop);
+			if (abs(ang_pos[0]) > 10 || abs(ang_pos[1] > 10)
+					|| motor_speed_[0] > 0.25 || motor_speed_[1] > 0.25
+					|| motor_speed_[2] > 0.25 || motor_speed_[3] > 0.25) {
 				UI::Print("E-STOP: Threshold exceeded\n");
 				UI::Print(
 						"Roll: " + to_string(ang_pos[0]) + ", "
@@ -243,13 +264,14 @@ int main() {
 								+ to_string(motor_speed_[1]) + ", "
 								+ to_string(motor_speed_[2]) + ", "
 								+ to_string(motor_speed_[3]) + "\n");
+				OnStop();
 				continue;
 			}
 
-			target_throttle_ = receiver.get_throttle() / 100.0 * kMaxThrottle;
-			target_roll_ = receiver.get_roll() / 100.0 * kMaxRollPitch;
-			target_pitch_ = receiver.get_pitch() / 100.0 * kMaxRollPitch;
-			target_yaw_ = receiver.get_yaw() / 100.0 * kMaxYaw;
+			target_throttle_ = receiver->get_throttle() / 100.0 * kMaxThrottle;
+			target_roll_ = receiver->get_roll() / 100.0 * kMaxRollPitch;
+			target_pitch_ = receiver->get_pitch() / 100.0 * kMaxRollPitch;
+			target_yaw_ = receiver->get_yaw() / 100.0 * kMaxYaw;
 			float err_throttle = target_throttle_ - lin_velocity[2];
 			float errd_throttle = -lin_accel[2];
 			float err_roll = target_roll_ - ang_pos[0];
@@ -269,15 +291,16 @@ int main() {
 			float uroll = kPRollPitch * err_roll + kDRollPitch * errd_roll;
 			float upitch = kPRollPitch * err_pitch + kDRollPitch * errd_pitch;
 			float uyaw = kPYaw * err_yaw;
-			hover_ += uz;
-			hover_ = max(min(hover_, kMaxMotor), 0);
+//			hover_ += uz;
+//			hover_ = max(min(hover_, kMaxMotor), 0);
+			hover_ = receiver->get_throttle() / 100.0;
 			uroll = max(min(uroll, 1 - kMaxMotor), -1 + kMaxMotor);
 			upitch = max(min(upitch, 1 - kMaxMotor), -1 + kMaxMotor);
 			uyaw = max(min(uyaw, 1 - kMaxMotor), -1 + kMaxMotor);
-			motor_speed_[0] = max(min(hover_ + uroll - upitch - uyaw, 1), 0);
-			motor_speed_[1] = max(min(hover_ - uroll - upitch + uyaw, 1), 0);
-			motor_speed_[2] = max(min(hover_ - uroll + upitch - uyaw, 1), 0);
-			motor_speed_[3] = max(min(hover_ + uroll + upitch + uyaw, 1), 0);
+			motor_speed_[0] = max(min(hover_ + uroll - upitch + uyaw, 1), 0);
+			motor_speed_[1] = max(min(hover_ - uroll - upitch - uyaw, 1), 0);
+			motor_speed_[2] = max(min(hover_ - uroll + upitch + uyaw, 1), 0);
+			motor_speed_[3] = max(min(hover_ + uroll + upitch - uyaw, 1), 0);
 			gpioPWM(motor_gpio_[0], motor_speed_[0] * 1000 + 1000);
 			gpioPWM(motor_gpio_[1], motor_speed_[1] * 1000 + 1000);
 			gpioPWM(motor_gpio_[2], motor_speed_[2] * 1000 + 1000);

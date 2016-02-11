@@ -16,10 +16,11 @@
 
 class Receiver {
 public:
-	static const char kCommandStart = 1;
-	static const char kCommandStop = 2;
-
-	typedef std::function<void(char cmd)> CmdListener;
+	enum Mode {
+		JoyStick, Wifi
+	};
+	typedef std::function<void()> StartCmdListener;
+	typedef std::function<void()> StopCmdListener;
 	typedef std::function<void()> LostConnListener;
 
 	Receiver(std::unique_ptr<Connection> conn);
@@ -30,21 +31,19 @@ public:
 	int Start();
 	void Stop();
 	void Reset();
-	void AddOnCmdListener(CmdListener cmdListener);
-	void AddOnLostConnListener(LostConnListener lostConnListener);
+	void AddStartCmdListener(StartCmdListener startCmdListener);
+	void AddStopCmdListener(StopCmdListener stopCmdListener);
+	void AddLostConnListener(LostConnListener lostConnListener);
 private:
-	static const char kPacketTypeControl = 1;
-	static const char kPacketTypeCommand = 2;
-
-	struct ControlPacket;
-	struct CommandPacket;
 	long last_packet_recv_;
 	const std::unique_ptr<Connection> conn_;
 	int throttle_, roll_, pitch_, yaw_; // -100 to 100
-	std::vector<CmdListener> cmd_listeners_;
+	std::vector<StartCmdListener> start_cmd_listeners_;
+	std::vector<StopCmdListener> stop_cmd_listeners_;
 	std::vector<LostConnListener> lost_conn_listeners_;
 
-	void OnMsgRecv(char* msg, unsigned int length);
+	void OnCtrl(Connection::ControlPacket);
+	void OnCmd(Connection::CommandPacket);
 	void OnError(int errornum);
 };
 

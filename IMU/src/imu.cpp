@@ -18,24 +18,15 @@
 
 using namespace std;
 
-IMU::IMU() :
-		h_gyro_(0), h_accelmag_(0), inverted_ { 1, 1, 1, 1 }, zero_ang_offset_ {
-				0 }, zero_angrate_offset_ { 0 }, zero_g_offset_ { 0 }, hard_iron_offset_ {
-				0 }, accel_g_ { 0 }, accel_orientation_ { 0 }, gravity_ { 0 }, angular_pos_ {
-				0 }, angular_velocity_ { 0 }, lin_velocity_movingsum_ { 0 }, lin_velocity_ {
-				0 }, lin_accel_ { 0 }, time_movingsum_(0) {
-	for (int i = 0; i < 1000; i++) { // 250 samples
-		array<float, 4> tmp = { 0 };
-		accel_samples_.push(tmp);
-	}
+IMU::IMU() {
 }
 
 array<float, 3> IMU::get_angular_pos() {
-	return angular_pos_;
+	return ang_pos_;
 }
 
 array<float, 3> IMU::get_angular_velocity() {
-	return angular_velocity_;
+	return ang_velocity_smoothed_;
 }
 
 array<float, 3> IMU::get_lin_velocity() {
@@ -177,9 +168,9 @@ int IMU::CalibrateZeroFieldOffset() {
 		int result = ProcessData();
 		if (result < 0)
 			return result;
-		angrate_x_samples[i] = -angular_velocity_[0];
-		angrate_y_samples[i] = -angular_velocity_[1];
-		angrate_z_samples[i] = -angular_velocity_[2];
+		angrate_x_samples[i] = -ang_velocity_[0];
+		angrate_y_samples[i] = -ang_velocity_[1];
+		angrate_z_samples[i] = -ang_velocity_[2];
 		zero_g_offset_[0] += -accel_g_[0];
 		zero_g_offset_[1] += -accel_g_[1];
 		zero_g_offset_[2] += -accel_g_[2] + 1;
@@ -192,7 +183,7 @@ int IMU::CalibrateZeroFieldOffset() {
 		result = ProcessData();
 		if (result < 0)
 			return result;
-		zero_ang_offset_[2] += -deg2rad(angular_pos_[2]);
+		zero_ang_offset_[2] += -deg2rad(ang_pos_[2]);
 		this_thread::sleep_for(chrono::milliseconds(1));
 	}
 	sort(angrate_x_samples.begin(), angrate_x_samples.end());
@@ -229,14 +220,37 @@ inline int IMU::ProcessData() {
 			* inverted_[1] + zero_g_offset_[1];
 	accel_g_[2] = ((float) *raw_z / numeric_limits<short>::max()) * kAccelRange
 			* inverted_[3] + zero_g_offset_[2];
+	array<float, 4> sample;
+	sample[0] = accel_g_[0];
+	sample[1] = accel_g_[1];
+	sample[2] = accel_g_[2];
+	sample[3] = delta;
+	accel_g_samples_.push(sample);
+	accel_g_movingsum_[0] += sample[0];
+	accel_g_movingsum_[1] += sample[1];
+	accel_g_movingsum_[2] += sample[2];
+	accel_g_time_ += sample[3];
+	while (accel_g_time_ > 0.05 && accel_g_samples_.size() > 0) {
+		sample = accel_g_samples_.front();
+		accel_g_samples_.pop();
+		accel_g_movingsum_[0] -= sample[0];
+		accel_g_movingsum_[1] -= sample[1];
+		accel_g_movingsum_[2] -= sample[2];
+		accel_g_time_ -= sample[3];
+	}
+	accel_g_smoothed_[0] = accel_g_movingsum_[0] / accel_g_samples_.size();
+	accel_g_smoothed_[1] = accel_g_movingsum_[1] / accel_g_samples_.size();
+	accel_g_smoothed_[2] = accel_g_movingsum_[2] / accel_g_samples_.size();
 
-	accel_orientation_[0] = rad2deg(atan2(accel_g_[1], accel_g_[2]))
+	accel_orientation_[0] = rad2deg(
+			atan2(accel_g_smoothed_[1], accel_g_smoothed_[2]))
 			+ zero_ang_offset_[0];
 	accel_orientation_[1] = rad2deg(
-			atan2(-accel_g_[0],
+			atan2(-accel_g_smoothed_[0],
 					sqrt(
-							accel_g_[1] * accel_g_[1]
-									+ accel_g_[2] * accel_g_[2])))
+							accel_g_smoothed_[1] * accel_g_smoothed_[1]
+									+ accel_g_smoothed_[2]
+											* accel_g_smoothed_[2])))
 			+ zero_ang_offset_[1];
 
 	result = i2cReadI2CBlockData(h_gyro_, 0xA8, buf, 6);
@@ -246,19 +260,42 @@ inline int IMU::ProcessData() {
 	raw_y = (short*) (buf + 2);
 	raw_z = (short*) (buf + 4);
 
-	angular_velocity_[0] = (((float) *raw_x / numeric_limits<short>::max())
+	ang_velocity_[0] = (((float) *raw_x / numeric_limits<short>::max())
 			* kGyroRange) * inverted_[0] + zero_angrate_offset_[0];
-	angular_velocity_[1] = (((float) *raw_y / numeric_limits<short>::max())
+	ang_velocity_[1] = (((float) *raw_y / numeric_limits<short>::max())
 			* kGyroRange) * inverted_[1] + zero_angrate_offset_[1];
-	angular_velocity_[2] = (((float) *raw_z / numeric_limits<short>::max())
+	ang_velocity_[2] = (((float) *raw_z / numeric_limits<short>::max())
 			* kGyroRange) * inverted_[2] + zero_angrate_offset_[2];
+	sample[0] = ang_velocity_[0];
+	sample[1] = ang_velocity_[1];
+	sample[2] = ang_velocity_[2];
+	sample[3] = delta;
+	ang_velo_samples_.push(sample);
+	ang_velo_movingsum_[0] += sample[0];
+	ang_velo_movingsum_[1] += sample[1];
+	ang_velo_movingsum_[2] += sample[2];
+	ang_velo_time_ += sample[3];
+	while (ang_velo_time_ > 0.05 && ang_velo_samples_.size() > 0) {
+		sample = ang_velo_samples_.front();
+		ang_velo_samples_.pop();
+		ang_velo_movingsum_[0] -= sample[0];
+		ang_velo_movingsum_[1] -= sample[1];
+		ang_velo_movingsum_[2] -= sample[2];
+		ang_velo_time_ -= sample[3];
+	}
+	ang_velocity_smoothed_[0] = ang_velo_movingsum_[0]
+			/ ang_velo_samples_.size();
+	ang_velocity_smoothed_[1] = ang_velo_movingsum_[1]
+			/ ang_velo_samples_.size();
+	ang_velocity_smoothed_[2] = ang_velo_movingsum_[2]
+			/ ang_velo_samples_.size();
 
 	float factor = delta;
-	angular_pos_[0] = (1 - factor)
-			* (angular_pos_[0] + angular_velocity_[0] * delta)
+	ang_pos_[0] = (1 - factor)
+			* (ang_pos_[0] + ang_velocity_smoothed_[0] * delta)
 			+ factor * accel_orientation_[0];
-	angular_pos_[1] = (1 - factor)
-			* (angular_pos_[1] + angular_velocity_[1] * delta)
+	ang_pos_[1] = (1 - factor)
+			* (ang_pos_[1] + ang_velocity_smoothed_[1] * delta)
 			+ factor * accel_orientation_[1];
 
 //	gravity_[0] = sin(deg2rad(angular_pos_[1])) * kGravity;
@@ -269,10 +306,10 @@ inline int IMU::ProcessData() {
 //		tmp = 0;
 //	gravity_[2] = sqrt(tmp);
 
-	gravity_[0] = sin(deg2rad(angular_pos_[1])) * kGravity;
-	gravity_[1] = -cos(deg2rad(angular_pos_[1])) * sin(deg2rad(angular_pos_[0]))
+	gravity_[0] = sin(deg2rad(ang_pos_[1])) * kGravity;
+	gravity_[1] = -cos(deg2rad(ang_pos_[1])) * sin(deg2rad(ang_pos_[0]))
 			* kGravity;
-	gravity_[2] = cos(deg2rad(angular_pos_[1])) * cos(deg2rad(angular_pos_[0]))
+	gravity_[2] = cos(deg2rad(ang_pos_[1])) * cos(deg2rad(ang_pos_[0]))
 			* kGravity;
 
 	result = i2cReadI2CBlockData(h_accelmag_, 0x88, buf, 6);
@@ -289,19 +326,18 @@ inline int IMU::ProcessData() {
 	float bz = (((float) *raw_z - hard_iron_offset_[2])
 			/ numeric_limits<short>::max()) * kMagRange * inverted_[2];
 
-	float phi = deg2rad(angular_pos_[0]);
-	float theta = deg2rad(angular_pos_[1]);
-	angular_pos_[2] = rad2deg(
+	float phi = deg2rad(ang_pos_[0]);
+	float theta = deg2rad(ang_pos_[1]);
+	ang_pos_[2] = rad2deg(
 			atan2(bz * sin(phi) - by * cos(phi),
 					bx * cos(theta) + by * sin(phi) * sin(theta)
 							+ bz * sin(theta) * cos(phi)) * inverted_[2]
 					+ zero_ang_offset_[2]);
 
-	lin_accel_[0] = -accel_g_[0] * kGravity - gravity_[0];
-	lin_accel_[1] = -accel_g_[1] * kGravity - gravity_[1];
-	lin_accel_[2] = accel_g_[2] * kGravity - gravity_[2];
+	lin_accel_[0] = -accel_g_smoothed_[0] * kGravity - gravity_[0];
+	lin_accel_[1] = -accel_g_smoothed_[1] * kGravity - gravity_[1];
+	lin_accel_[2] = accel_g_smoothed_[2] * kGravity - gravity_[2];
 
-	array<float, 4> sample;
 	if (abs(lin_accel_[0]) < kAccelThreshold)
 		sample[0] = 0;
 	else
@@ -315,29 +351,32 @@ inline int IMU::ProcessData() {
 	else
 		sample[2] = lin_accel_[2] * delta;
 	sample[3] = delta;
-	accel_samples_.push(sample);
+	lin_accel_samples_.push(sample);
 	lin_velocity_movingsum_[0] += sample[0];
 	lin_velocity_movingsum_[1] += sample[1];
 	lin_velocity_movingsum_[2] += sample[2];
-	time_movingsum_ += delta;
-	while (time_movingsum_ > 5 && accel_samples_.size() > 0) {
-		sample = accel_samples_.front();
-		accel_samples_.pop();
+	lin_velo_time_ += delta;
+	while (lin_velo_time_ > 1 && lin_accel_samples_.size() > 0) {
+		sample = lin_accel_samples_.front();
+		lin_accel_samples_.pop();
 		lin_velocity_movingsum_[0] -= sample[0];
 		lin_velocity_movingsum_[1] -= sample[1];
 		lin_velocity_movingsum_[2] -= sample[2];
-		time_movingsum_ -= sample[3];
+		lin_velo_time_ -= sample[3];
 	}
 
 	// Update new velocities
-	if (time_movingsum_ != 0) {
-		lin_velocity_[0] = lin_velocity_movingsum_[0] / time_movingsum_;
-		lin_velocity_[1] = lin_velocity_movingsum_[1] / time_movingsum_;
-		lin_velocity_[2] = lin_velocity_movingsum_[2] / time_movingsum_;
+	if (lin_velo_time_ != 0) {
+		lin_velocity_[0] = lin_velocity_movingsum_[0] / lin_velo_time_;
+		lin_velocity_[1] = lin_velocity_movingsum_[1] / lin_velo_time_;
+		lin_velocity_[2] = lin_velocity_movingsum_[2] / lin_velo_time_;
 	} else {
 		lin_velocity_[0] = 0;
 		lin_velocity_[1] = 0;
 		lin_velocity_[2] = 0;
+		lin_accel_[0] = 0;
+		lin_accel_[1] = 0;
+		lin_accel_[2] = 0;
 	}
 	return 1;
 }

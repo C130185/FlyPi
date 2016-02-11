@@ -16,34 +16,29 @@
 
 using namespace std;
 
-struct Receiver::ControlPacket {
-	long long time;
-	signed char type;
-	signed char throttle;
-	signed char roll;
-	signed char pitch;
-	signed char yaw;
-};
-
-struct Receiver::CommandPacket {
-	long long time;
-	signed char type;
-	signed char cmd;
-};
-
 Receiver::Receiver(unique_ptr<Connection> conn) :
-		last_packet_recv_(0), conn_(move(conn)), throttle_(0), roll_(0), pitch_(
-				0), yaw_(0) {
-	conn_->AddOnRecvListener(
-			[this](char* msg, unsigned int length) {this->OnMsgRecv(msg, length);});
+				last_packet_recv_(0),
+				conn_(move(conn)),
+				throttle_(0),
+				roll_(0),
+				pitch_(0),
+				yaw_(0) {
+	conn_->AddCmdListener(
+			[this](Connection::CommandPacket cmdPacket) {this->OnCmd(cmdPacket);});
+	conn_->AddCtrlListener(
+			[this](Connection::ControlPacket ctrlPacket) {this->OnCtrl(ctrlPacket);});
 	conn_->AddErrorHandler([this](int errornum) {this->OnError(errornum);});
 }
 
-void Receiver::AddOnCmdListener(CmdListener cmdListener) {
-	cmd_listeners_.push_back(cmdListener);
+void Receiver::AddStartCmdListener(StartCmdListener startCmdListener) {
+	start_cmd_listeners_.push_back(startCmdListener);
 }
 
-void Receiver::AddOnLostConnListener(LostConnListener lostConnListener) {
+void Receiver::AddStopCmdListener(StopCmdListener stopCmdListener) {
+	stop_cmd_listeners_.push_back(stopCmdListener);
+}
+
+void Receiver::AddLostConnListener(LostConnListener lostConnListener) {
 	lost_conn_listeners_.push_back(lostConnListener);
 }
 
@@ -78,60 +73,45 @@ int Receiver::get_yaw() {
 	return yaw_;
 }
 
-void Receiver::OnMsgRecv(char* msg, unsigned int length) {
-	try {
-		long long time = *((long long*) msg);
-		if (last_packet_recv_ > time) { // Discard old packets
-			UI::Print("Discarding unordered packet received\n");
-			return;
-		}
-		last_packet_recv_ = time;
+void Receiver::OnCtrl(Connection::ControlPacket ctrlPacket) {
+	if (last_packet_recv_ > ctrlPacket.time) { // Discard old packets
+		UI::Print("Discarding unordered packet received\n");
+		return;
+	}
+	throttle_ = ctrlPacket.throttle;
+	roll_ = ctrlPacket.roll;
+	pitch_ = ctrlPacket.pitch;
+	yaw_ = ctrlPacket.yaw;
+	if (throttle_ > 100)
+		throttle_ = 100;
+	if (throttle_ < -100)
+		throttle_ = -100;
+	if (roll_ > 100)
+		roll_ = 100;
+	if (roll_ < -100)
+		roll_ = -100;
+	if (pitch_ > 100)
+		pitch_ = 100;
+	if (pitch_ < -100)
+		pitch_ = -100;
+	if (yaw_ > 100)
+		yaw_ = 100;
+	if (yaw_ < -100)
+		yaw_ = -100;
+}
 
-		char type = msg[8];
-		ostringstream oss;
-		switch (type) {
-		case kPacketTypeControl:
-			ControlPacket control_packet;
-			control_packet.throttle = msg[9];
-			control_packet.roll = msg[10];
-			control_packet.pitch = msg[11];
-			control_packet.yaw = msg[12];
-			throttle_ = control_packet.throttle;
-			roll_ = control_packet.roll;
-			pitch_ = control_packet.pitch;
-			yaw_ = control_packet.yaw;
-			if (throttle_ > 100)
-				throttle_ = 100;
-			if (throttle_ < -100)
-				throttle_ = -100;
-			if (roll_ > 100)
-				roll_ = 100;
-			if (roll_ < -100)
-				roll_ = -100;
-			if (pitch_ > 100)
-				pitch_ = 100;
-			if (pitch_ < -100)
-				pitch_ = -100;
-			if (yaw_ > 100)
-				yaw_ = 100;
-			if (yaw_ < -100)
-				yaw_ = -100;
-			break;
-		case kPacketTypeCommand:
-			CommandPacket cmd_packet;
-			cmd_packet.cmd = msg[9];
-			for (CmdListener cmd_listener : cmd_listeners_) {
-				cmd_listener(cmd_packet.cmd);
-			}
-			break;
-		default:
-			UI::Print("Unknown packet type received\n");
-			break;
+void Receiver::OnCmd(Connection::CommandPacket cmdPacket) {
+	switch (cmdPacket.cmd) {
+	case Connection::kCommandStart:
+		for (StartCmdListener start_listener : start_cmd_listeners_) {
+			start_listener();
 		}
-	} catch (exception& e) {
-		ostringstream oss;
-		oss << "Error: " << e.what() << endl;
-		UI::Print(oss.str());
+		break;
+	case Connection::kCommandStop:
+		for (StopCmdListener stop_listener : stop_cmd_listeners_) {
+			stop_listener();
+		}
+		break;
 	}
 }
 

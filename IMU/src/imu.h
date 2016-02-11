@@ -45,23 +45,31 @@ private:
 	inline int ProcessData();
 	int LoadConf();
 
-	int h_gyro_;
-	int h_accelmag_;
-	std::array<signed char, 4> inverted_;
-	std::array<float, 3> zero_ang_offset_;
-	std::array<float, 3> zero_angrate_offset_;
-	std::array<float, 3> zero_g_offset_;
-	std::array<float, 3> hard_iron_offset_;
-	std::array<float, 3> accel_g_;
-	std::array<float, 2> accel_orientation_;
-	std::array<float, 3> gravity_;
-	std::array<float, 3> angular_pos_;
-	std::array<float, 3> angular_velocity_;
-	std::array<float, 3> lin_velocity_movingsum_;
-	std::array<float, 3> lin_velocity_;
-	std::array<float, 3> lin_accel_;
-	std::queue<std::array<float, 4>> accel_samples_;
-	float time_movingsum_;
+	int h_gyro_ = 0;
+	int h_accelmag_ = 0;
+	std::array<signed char, 4> inverted_ = { { 1, 1, 1, 1 } };
+	std::array<float, 3> zero_ang_offset_ = { { 0 } };
+	std::array<float, 3> zero_angrate_offset_ = { { 0 } };
+	std::array<float, 3> zero_g_offset_ = { { 0 } };
+	std::array<float, 3> hard_iron_offset_ = { { 0 } };
+	std::array<float, 3> accel_g_ = { { 0 } };
+	std::array<float, 3> accel_g_smoothed_ = { { 0 } };
+	std::array<float, 2> accel_orientation_ = { { 0 } };
+	std::array<float, 3> gravity_ = { { 0 } };
+	std::array<float, 3> ang_pos_ = { { 0 } };
+	std::array<float, 3> ang_velocity_ = { { 0 } };
+	std::array<float, 3> ang_velocity_smoothed_ = { { 0 } };
+	std::array<float, 3> lin_velocity_movingsum_ = { { 0 } };
+	std::array<float, 3> ang_velo_movingsum_ = { { 0 } };
+	std::array<float, 3> accel_g_movingsum_ = { { 0 } };
+	std::array<float, 3> lin_velocity_ = { { 0 } };
+	std::array<float, 3> lin_accel_ = { { 0 } };
+	std::queue<std::array<float, 4>> lin_accel_samples_;
+	std::queue<std::array<float, 4>> ang_velo_samples_;
+	std::queue<std::array<float, 4>> accel_g_samples_;
+	float lin_velo_time_ = 0;
+	float ang_velo_time_ = 0;
+	float accel_g_time_ = 0;
 	std::chrono::time_point<std::chrono::high_resolution_clock,
 			std::chrono::high_resolution_clock::duration> last_update_;
 
