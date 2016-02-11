@@ -20,6 +20,10 @@ void Connection::AddCmdListener(CmdListener listener) {
 	cmd_listeners_.push_back(listener);
 }
 
+void Connection::AddLostConnListener(LostConnListener listener) {
+	lost_conn_listeners_.push_back(listener);
+}
+
 void Connection::AddErrorHandler(ErrorHandler handler) {
 	error_handlers_.push_back(handler);
 }

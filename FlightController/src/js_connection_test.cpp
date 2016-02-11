@@ -1,29 +1,20 @@
-/*
- * ds4_connection_test.cpp
- *
- *  Created on: Feb 10, 2016
- *      Author: teoko
- */
+#include "js_connection.h"
 
 #include <iostream>
-#include <memory>
 #include <string>
 
-#include "js_connection.h"
-#include "receiver.h"
+#include "test.h"
 
 using namespace std;
 
-Receiver jsreceiver(unique_ptr<JSConnection>(new JSConnection()));
-
 void OnEvent() {
-	cout << to_string(jsreceiver.get_throttle()) << "\n";
+	cout << "Lost Connection!\n";
 }
 
-int test() {
-	jsreceiver.AddStartCmdListener(&OnEvent);
-	jsreceiver.AddStopCmdListener(&OnEvent);
-	jsreceiver.Start();
+int Test::test_js() {
+	JSConnection jsconn;
+	jsconn.AddLostConnListener(&OnEvent);
+	jsconn.Start();
 
 	cin.ignore();
 	return 1;

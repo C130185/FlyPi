@@ -17,12 +17,8 @@
 using namespace std;
 
 Receiver::Receiver(unique_ptr<Connection> conn) :
-				last_packet_recv_(0),
-				conn_(move(conn)),
-				throttle_(0),
-				roll_(0),
-				pitch_(0),
-				yaw_(0) {
+		last_packet_recv_(0), conn_(move(conn)), throttle_(0), roll_(0), pitch_(
+				0), yaw_(0) {
 	conn_->AddCmdListener(
 			[this](Connection::CommandPacket cmdPacket) {this->OnCmd(cmdPacket);});
 	conn_->AddCtrlListener(
@@ -39,7 +35,7 @@ void Receiver::AddStopCmdListener(StopCmdListener stopCmdListener) {
 }
 
 void Receiver::AddLostConnListener(LostConnListener lostConnListener) {
-	lost_conn_listeners_.push_back(lostConnListener);
+	conn_->AddLostConnListener(lostConnListener);
 }
 
 int Receiver::Start() {
@@ -121,9 +117,5 @@ void Receiver::OnError(int errornum) {
 		oss << "Error: " << strerror(errornum) << " (" << errornum << ")"
 				<< endl;
 		UI::Print(oss.str());
-	} else {
-		for (LostConnListener lost_conn_listener : lost_conn_listeners_) {
-			lost_conn_listener();
-		}
 	}
 }

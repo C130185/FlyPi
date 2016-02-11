@@ -1,5 +1,5 @@
 /*
- * ds4_connection.cpp
+ * js_connection.cpp
  *
  *  Created on: Feb 10, 2016
  *      Author: teoko
@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <chrono>
 #include <limits>
+#include <vector>
 
 using namespace std;
 
@@ -20,7 +21,7 @@ JSConnection::JSConnection() {
 }
 
 int JSConnection::Start() {
-	ds4fd = open("/dev/input/js0", O_RDONLY);
+	fd_ = open("/dev/input/js0", O_RDONLY | O_NONBLOCK);
 	state_ = Running;
 
 	bgthread_ = thread(&JSConnection::ReadJSE, this);
@@ -29,12 +30,36 @@ int JSConnection::Start() {
 
 void JSConnection::Stop() {
 	state_ = Stopping;
+	bgthread_.join();
+}
+
+void JSConnection::AddJSEventListener(JSEventListener jse) {
+	jse_listeners_.push_back(jse);
 }
 
 void JSConnection::ReadJSE() {
 	struct js_event jse;
+
 	while (state_ == Running) {
-		read(ds4fd, &jse, sizeof(jse));
+		auto now = chrono::system_clock::now();
+		auto delta = chrono::duration_cast<chrono::milliseconds>(
+				now - last_recv_time_).count();
+		if (delta >= 200) {
+			for (LostConnListener listener : lost_conn_listeners_) {
+				listener();
+			}
+		}
+
+		int result = read(fd_, &jse, sizeof(jse));
+		if (result == -1) {
+			this_thread::sleep_for(chrono::milliseconds(10));
+			continue;
+		}
+
+		last_recv_time_ = std::chrono::system_clock::now();
+		for (JSEventListener listener : jse_listeners_) {
+			listener(jse);
+		}
 
 		__u8 type = jse.type;
 		if (type == JS_EVENT_BUTTON) {
@@ -77,7 +102,6 @@ void JSConnection::ReadJSE() {
 				listener(ctrl_packet_);
 			}
 		}
-		this_thread::sleep_for(chrono::milliseconds(10));
 	}
-	close(ds4fd);
+	close(fd_);
 }

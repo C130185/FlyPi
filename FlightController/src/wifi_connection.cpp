@@ -18,9 +18,7 @@
 using namespace std;
 
 WifiConnection::WifiConnection(int port) :
-				state_(Created),
-				port_(port),
-				buffer_ { 0 } {
+		state_(Created), port_(port), buffer_ { 0 } {
 	sockfd_ = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sockfd_ < 0) {
 		HandleErrors(errno);
@@ -63,7 +61,13 @@ void WifiConnection::DoRecv() {
 	while (state_ != Stopping) {
 		int n = recv(sockfd_, buffer_, kBufferLength, 0);
 		if (n < 0) {
-			HandleErrors(errno);
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				for (LostConnListener listener : lost_conn_listeners_) {
+					listener();
+				}
+			} else {
+				HandleErrors(errno);
+			}
 			continue;
 		}
 		char type = buffer_[8];

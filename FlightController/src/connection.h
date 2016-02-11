@@ -30,6 +30,7 @@ public:
 
 	typedef std::function<void(ControlPacket)> CtrlListener;
 	typedef std::function<void(CommandPacket)> CmdListener;
+	typedef std::function<void()> LostConnListener;
 	typedef std::function<void(int errornum)> ErrorHandler;
 
 	static const char kPacketTypeControl = 1;
@@ -43,10 +44,12 @@ public:
 	virtual void Stop() = 0;
 	void AddCtrlListener(CtrlListener listener);
 	void AddCmdListener(CmdListener listener);
+	void AddLostConnListener(LostConnListener listener);
 	void AddErrorHandler(ErrorHandler handler);
 protected:
 	std::vector<CtrlListener> ctrl_listeners_;
 	std::vector<CmdListener> cmd_listeners_;
+	std::vector<LostConnListener> lost_conn_listeners_;
 	std::vector<ErrorHandler> error_handlers_;
 };
 

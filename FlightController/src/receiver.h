@@ -40,7 +40,6 @@ private:
 	int throttle_, roll_, pitch_, yaw_; // -100 to 100
 	std::vector<StartCmdListener> start_cmd_listeners_;
 	std::vector<StopCmdListener> stop_cmd_listeners_;
-	std::vector<LostConnListener> lost_conn_listeners_;
 
 	void OnCtrl(Connection::ControlPacket);
 	void OnCmd(Connection::CommandPacket);

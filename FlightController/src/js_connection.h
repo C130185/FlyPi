@@ -1,5 +1,5 @@
 /*
- * ds4_connection.h
+ * js_connection.h
  *
  *  Created on: Feb 10, 2016
  *      Author: teoko
@@ -9,12 +9,17 @@
 #define JS_CONNECTION_H_
 
 #include <asm-generic/int-ll64.h>
+#include <joystick.h>
+#include <functional>
 #include <thread>
+#include <vector>
 
 #include "connection.h"
 
 class JSConnection: public Connection {
 public:
+	typedef std::function<void(js_event)> JSEventListener;
+
 	static const __u8 BTN_SQUARE = 0;
 	static const __u8 BTN_CROSS = 1;
 	static const __u8 BTN_CIRCLE = 2;
@@ -37,16 +42,19 @@ public:
 	JSConnection();
 	int Start();
 	void Stop();
+	void AddJSEventListener(JSEventListener jse);
 private:
 	enum State {
 		Running, Stopping, Ready, Created
 	};
 
-	int ds4fd = 0;
+	int fd_ = 0;
+	std::chrono::system_clock::time_point last_recv_time_  = std::chrono::system_clock::now();
 	State state_;
 	std::thread bgthread_;
 	CommandPacket cmd_packet_;
 	ControlPacket ctrl_packet_;
+	std::vector<JSEventListener> jse_listeners_;
 
 	void ReadJSE();
 };
