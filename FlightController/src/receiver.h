@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "connection.h"
+#include "UI.h"
 
 class Receiver {
 public:
@@ -23,7 +24,7 @@ public:
 	typedef std::function<void()> StopCmdListener;
 	typedef std::function<void()> LostConnListener;
 
-	Receiver(std::unique_ptr<Connection> conn);
+	Receiver(std::unique_ptr<Connection> conn, UI* ui);
 	int get_throttle();
 	int get_roll();
 	int get_pitch();
@@ -40,6 +41,7 @@ private:
 	int throttle_, roll_, pitch_, yaw_; // -100 to 100
 	std::vector<StartCmdListener> start_cmd_listeners_;
 	std::vector<StopCmdListener> stop_cmd_listeners_;
+	UI* ui_;
 
 	void OnCtrl(Connection::ControlPacket);
 	void OnCmd(Connection::CommandPacket);

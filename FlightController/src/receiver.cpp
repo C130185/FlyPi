@@ -12,13 +12,13 @@
 #include <exception>
 #include <sstream>
 
-#include "ui.h"
+#include "NCurseUI.h"
 
 using namespace std;
 
-Receiver::Receiver(unique_ptr<Connection> conn) :
+Receiver::Receiver(unique_ptr<Connection> conn, UI* ui) :
 		last_packet_recv_(0), conn_(move(conn)), throttle_(0), roll_(0), pitch_(
-				0), yaw_(0) {
+				0), yaw_(0), ui_(ui) {
 	conn_->AddCmdListener(
 			[this](Connection::CommandPacket cmdPacket) {this->OnCmd(cmdPacket);});
 	conn_->AddCtrlListener(
@@ -71,7 +71,7 @@ int Receiver::get_yaw() {
 
 void Receiver::OnCtrl(Connection::ControlPacket ctrlPacket) {
 	if (last_packet_recv_ > ctrlPacket.time) { // Discard old packets
-		UI::Print("Discarding unordered packet received\n");
+		ui_->Print("Discarding unordered packet received\n");
 		return;
 	}
 	throttle_ = ctrlPacket.throttle;
@@ -116,6 +116,6 @@ void Receiver::OnError(int errornum) {
 		ostringstream oss;
 		oss << "Error: " << strerror(errornum) << " (" << errornum << ")"
 				<< endl;
-		UI::Print(oss.str());
+		ui_->Print(oss.str());
 	}
 }
