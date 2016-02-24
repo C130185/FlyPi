@@ -21,32 +21,32 @@ NCurseUI* NCurseUI::getInstance() {
 	return &instance;
 }
 
-void NCurseUI::Init() {
+void NCurseUI::init() {
 	initscr();
 	curs_set(0);
 	noecho();
-	stat_win_ = newwin(9, COLS, LINES - 9, 0);
-	log_win_ = newwin(getbegy(stat_win_), COLS, 0, 0);
-	scrollok(log_win_, true);
+	statWin = newwin(9, COLS, LINES - 9, 0);
+	logWin = newwin(getbegy(statWin), COLS, 0, 0);
+	scrollok(logWin, true);
 }
 
-void NCurseUI::End() {
-	delwin(stat_win_);
-	delwin(log_win_);
+void NCurseUI::end() {
+	delwin(statWin);
+	delwin(logWin);
 	endwin();
 }
 
-void NCurseUI::UpdateStat(const string& stat) {
+void NCurseUI::updateStat(const string& stat) {
 	mtx.lock();
-	wclear(stat_win_);
-	mvwaddstr(stat_win_, 0, 0, stat.c_str());
-	wrefresh(stat_win_);
+	wclear(statWin);
+	mvwaddstr(statWin, 0, 0, stat.c_str());
+	wrefresh(statWin);
 	mtx.unlock();
 }
 
-void NCurseUI::Print(const string& s) {
+void NCurseUI::print(const string& s) {
 	mtx.lock();
-	waddstr(log_win_, s.c_str());
-	wrefresh(log_win_);
+	waddstr(logWin, s.c_str());
+	wrefresh(logWin);
 	mtx.unlock();
 }

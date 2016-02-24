@@ -15,14 +15,14 @@ DummyUI* DummyUI::getInstance() {
 	return &instance;
 }
 
-void DummyUI::Init() {
+void DummyUI::init() {
 }
 
-void DummyUI::End() {
+void DummyUI::end() {
 }
 
-void DummyUI::UpdateStat(const std::string& stat) {
+void DummyUI::updateStat(const std::string& stat) {
 }
 
-void DummyUI::Print(const std::string& s) {
+void DummyUI::print(const std::string& s) {
 }

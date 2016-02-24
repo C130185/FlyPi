@@ -12,10 +12,10 @@ class UI {
 public:
 	virtual ~UI() {
 	}
-	virtual void Init() = 0;
-	virtual void End() = 0;
-	virtual void UpdateStat(const std::string& stat) = 0;
-	virtual void Print(const std::string& s) = 0;
+	virtual void init() = 0;
+	virtual void end() = 0;
+	virtual void updateStat(const std::string& stat) = 0;
+	virtual void print(const std::string& s) = 0;
 };
 
 #endif /* UI_H_ */

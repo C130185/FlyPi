@@ -5,8 +5,8 @@
  *      Author: teoko
  */
 
-#ifndef JS_CONNECTION_H_
-#define JS_CONNECTION_H_
+#ifndef JSCONNECTION_H_
+#define JSCONNECTION_H_
 
 #include <asm-generic/int-ll64.h>
 #include <joystick.h>
@@ -14,11 +14,11 @@
 #include <thread>
 #include <vector>
 
-#include "connection.h"
+#include "Connection.h"
 
-class JSConnection: public Connection {
+class JsConnection: public Connection {
 public:
-	typedef std::function<void(js_event)> JSEventListener;
+	typedef std::function<void(js_event)> JsEventListener;
 
 	static const __u8 BTN_SQUARE = 0;
 	static const __u8 BTN_CROSS = 1;
@@ -39,24 +39,25 @@ public:
 	static const __u8 AXIS_L3 = 3;
 	static const __u8 AXIS_R3 = 4;
 
-	JSConnection();
-	int Start();
-	void Stop();
-	void AddJSEventListener(JSEventListener jse);
+	JsConnection();
+	int start();
+	void stop();
+	void addJSEventListener(JsEventListener jse);
 private:
 	enum State {
-		Running, Stopping, Ready, Created
+		RUNNING, STOPPING, READY, CREATED
 	};
 
-	int fd_ = 0;
-	std::chrono::system_clock::time_point last_recv_time_  = std::chrono::system_clock::now();
-	State state_;
-	std::thread bgthread_;
-	CommandPacket cmd_packet_;
-	ControlPacket ctrl_packet_;
-	std::vector<JSEventListener> jse_listeners_;
+	int fd = 0;
+	std::chrono::system_clock::time_point lastRecvTime =
+			std::chrono::system_clock::now();
+	State state;
+	std::thread bgThread;
+	CommandPacket cmdPacket;
+	ControlPacket ctrlPacket;
+	std::vector<JsEventListener> jseListeners;
 
-	void ReadJSE();
+	void readJsEvent();
 };
 
-#endif /* JS_CONNECTION_H_ */
+#endif /* JSCONNECTION_H_ */

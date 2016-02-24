@@ -15,10 +15,10 @@
 class DummyUI: public UI {
 public:
 	static DummyUI* getInstance();
-	void Init();
-	void End();
-	void UpdateStat(const std::string& stat);
-	void Print(const std::string& s);
+	void init();
+	void end();
+	void updateStat(const std::string& stat);
+	void print(const std::string& s);
 private:
 	DummyUI();
 };

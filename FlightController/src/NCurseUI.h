@@ -16,15 +16,15 @@
 class NCurseUI: public UI {
 public:
 	static NCurseUI* getInstance();
-	void Init();
-	void End();
-	void UpdateStat(const std::string& stat);
-	void Print(const std::string& s);
+	void init();
+	void end();
+	void updateStat(const std::string& stat);
+	void print(const std::string& s);
 private:
 	NCurseUI();
 
-	WINDOW* stat_win_ = nullptr;
-	WINDOW* log_win_ = nullptr;
+	WINDOW* statWin = nullptr;
+	WINDOW* logWin = nullptr;
 };
 
 #endif /* NCURSEUI_H_ */

@@ -15,7 +15,7 @@ class Connection {
 public:
 	struct __attribute__((__packed__)) ControlPacket {
 		long long time = 0;
-		signed char type = kPacketTypeControl;
+		signed char type = PCK_TYPE_CONTROL;
 		signed char throttle = 0;
 		signed char roll = 0;
 		signed char pitch = 0;
@@ -24,8 +24,8 @@ public:
 
 	struct __attribute__((__packed__)) CommandPacket {
 		long long time = 0;
-		signed char type = kPacketTypeCommand;
-		signed char cmd = kCommandStop;
+		signed char type = PCK_TYPE_COMMAND;
+		signed char cmd = COMMAND_STOP;
 	};
 
 	typedef std::function<void(ControlPacket)> CtrlListener;
@@ -33,24 +33,24 @@ public:
 	typedef std::function<void()> LostConnListener;
 	typedef std::function<void(int errornum)> ErrorHandler;
 
-	static const char kPacketTypeControl = 1;
-	static const char kPacketTypeCommand = 2;
-	static const char kCommandStart = 1;
-	static const char kCommandStop = 2;
+	static const char PCK_TYPE_CONTROL = 1;
+	static const char PCK_TYPE_COMMAND = 2;
+	static const char COMMAND_START = 1;
+	static const char COMMAND_STOP = 2;
 
 	Connection();
 	virtual ~Connection() = default;
-	virtual int Start() = 0;
-	virtual void Stop() = 0;
-	void AddCtrlListener(CtrlListener listener);
-	void AddCmdListener(CmdListener listener);
-	void AddLostConnListener(LostConnListener listener);
-	void AddErrorHandler(ErrorHandler handler);
+	virtual int start() = 0;
+	virtual void stop() = 0;
+	void addCtrlListener(CtrlListener listener);
+	void addCmdListener(CmdListener listener);
+	void addLostConnListener(LostConnListener listener);
+	void addErrorHandler(ErrorHandler handler);
 protected:
-	std::vector<CtrlListener> ctrl_listeners_;
-	std::vector<CmdListener> cmd_listeners_;
-	std::vector<LostConnListener> lost_conn_listeners_;
-	std::vector<ErrorHandler> error_handlers_;
+	std::vector<CtrlListener> ctrlListeners;
+	std::vector<CmdListener> cmdListeners;
+	std::vector<LostConnListener> lostConnListeners;
+	std::vector<ErrorHandler> errorHandlers;
 };
 
 #endif /* CONNECTION_H_ */
