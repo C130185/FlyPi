@@ -28,6 +28,7 @@ Logger::Logger() {
 	if (!S_ISDIR(statStruct.st_mode)) {
 		mkdir(LOG_DIR.c_str(), 0777);
 	}
+	oss = new ofstream();
 }
 
 Logger::~Logger() {
@@ -36,13 +37,13 @@ Logger::~Logger() {
 }
 
 int Logger::open(string suffix) {
-	if (oss->is_open()) {
+	if (isOpen()) {
 		return -1;
 	}
 
 	time_t curTime = time(nullptr);
-	char fileName[suffix.length() + 1]; // time string + sep + suffix + ext + null terminator
-	strftime(fileName, 19, "%Y-%m-%d-%H-%M-%S", localtime(&curTime));
+	char fileName[suffix.length() + 25]; // time string + sep + suffix + ext + null terminator
+	strftime(fileName, 20, "%Y-%m-%d-%H-%M-%S", localtime(&curTime));
 	strcat(fileName, "-");
 	strcat(fileName, suffix.c_str());
 	strcat(fileName, ".log");
@@ -51,7 +52,6 @@ int Logger::open(string suffix) {
 		return -1;
 	}
 
-	oss = new ofstream(filePath);
 	oss->open(filePath);
 	return 0;
 }
@@ -65,9 +65,15 @@ void Logger::write(string msg) {
 }
 
 void Logger::close() {
-	oss->close();
+	if (isOpen()) {
+		oss->close();
+	}
 }
 
 bool Logger::isFileExists(string filePath) {
-	return ifstream(filePath);
+	struct stat statStruct;
+	if (stat(filePath.c_str(), &statStruct) == 0) {
+		return true;
+	}
+	return false;
 }

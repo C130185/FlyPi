@@ -9,6 +9,7 @@
 #define NCURSEUI_H_
 
 #include <ncurses.h>
+#include <mutex>
 #include <string>
 
 #include "UI.h"
@@ -21,10 +22,11 @@ public:
 	void updateStat(const std::string& stat);
 	void print(const std::string& s);
 private:
-	NCurseUI();
-
 	WINDOW* statWin = nullptr;
 	WINDOW* logWin = nullptr;
+	std::mutex mtx;
+
+	NCurseUI();
 };
 
 #endif /* NCURSEUI_H_ */

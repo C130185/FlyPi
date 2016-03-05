@@ -7,18 +7,14 @@
 
 #include "NCurseUI.h"
 
-#include <mutex>
-
 using namespace std;
-
-mutex mtx;
 
 NCurseUI::NCurseUI() {
 }
 
 NCurseUI* NCurseUI::getInstance() {
-	static NCurseUI instance;
-	return &instance;
+	static NCurseUI* instance = new NCurseUI();
+	return instance;
 }
 
 void NCurseUI::init() {

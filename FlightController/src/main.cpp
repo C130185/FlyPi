@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -57,6 +58,7 @@ Receiver* g_receiver;
 IMU g_imu;
 UI* g_ui;
 ILogger* g_logger;
+thread* g_uiThread;
 float g_targetThrottle;
 float g_targetRoll;
 float g_targetPitch;
@@ -64,8 +66,11 @@ float g_targetYaw;
 
 void onexit() {
 	g_ui->end();
+	g_uiThread->join();
 	delete g_receiver;
 	delete g_ui;
+	delete g_uiThread;
+	delete g_logger;
 	gpioTerminate();
 }
 
@@ -121,10 +126,6 @@ void uiLoop() {
 	}
 }
 
-void log(string msg) {
-	g_logger->write(msg);
-}
-
 inline float max(float a, float b) {
 	return a >= b ? a : b;
 }
@@ -148,9 +149,7 @@ void resetMotors() {
 void onStart() {
 	g_state = RUNNING;
 	g_ui->print("Received START signal\n");
-	if (g_logger->isOpen()) {
-		g_logger->close();
-	}
+	g_logger->close();
 	g_logger->open("angrate");
 }
 
@@ -190,6 +189,10 @@ void parseArgs(int argc, char* argv[]) {
 	}
 }
 
+bool isFileExists(string filePath) {
+	return ifstream(filePath);
+}
+
 int main(int argc, char* argv[]) {
 	parseArgs(argc, argv);
 	if (g_dummyUi) {
@@ -226,7 +229,7 @@ int main(int argc, char* argv[]) {
 
 	if (!g_dummyUi) {
 		g_ui->init();
-		thread uiThread(&uiLoop);
+		g_uiThread = new thread(&uiLoop);
 	}
 
 	int result = g_imu.init();
