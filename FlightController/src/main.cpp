@@ -50,6 +50,7 @@ static const float YAW_P = 0.001;
 bool g_jsMode = false;
 bool g_dummyUi = false;
 bool g_dummyLogger = true;
+bool g_stopping = false;
 State g_state = STOP;
 array<short, 4> g_motorGpio = { 23, 18, 15, 14 };
 array<float, 4> g_motorSpeed = { 0, 0, 0, 0 };
@@ -59,23 +60,32 @@ IMU g_imu;
 UI* g_ui;
 ILogger* g_logger;
 thread* g_uiThread;
+thread* g_mainThread;
 float g_targetThrottle;
 float g_targetRoll;
 float g_targetPitch;
 float g_targetYaw;
 
 void onexit() {
+	g_stopping = true;
+	g_receiver->stop();
+	if (g_uiThread->joinable()) {
+		g_uiThread->join();
+	}
+	if (g_mainThread->joinable()) {
+		g_mainThread->join();
+	}
 	g_ui->end();
-	g_uiThread->join();
 	delete g_receiver;
 	delete g_ui;
 	delete g_uiThread;
+	delete g_mainThread;
 	delete g_logger;
 	gpioTerminate();
 }
 
 void uiLoop() {
-	while (true) {
+	while (!g_stopping) {
 		ostringstream oss;
 
 		// print motors
@@ -193,31 +203,7 @@ bool isFileExists(string filePath) {
 	return ifstream(filePath);
 }
 
-int main(int argc, char* argv[]) {
-	parseArgs(argc, argv);
-	if (g_dummyUi) {
-		g_ui = DummyUI::getInstance();
-	} else {
-		g_ui = NCurseUI::getInstance();
-	}
-	if (g_jsMode) {
-		g_receiver = new Receiver(unique_ptr<Connection>(new JsConnection()),
-				g_ui);
-	} else {
-		g_receiver = new Receiver(
-				unique_ptr<Connection>(new WifiConnection(43123)), g_ui);
-	}
-	if (g_dummyLogger) {
-		g_logger = new DummyLogger();
-	} else {
-		g_logger = new Logger();
-	}
-
-	if (gpioInitialise() < 0) {
-		cout << "Error initializing gpio!" << endl;
-		return (-1);
-	}
-	atexit(onexit);
+void mainLoop() {
 	gpioSetPWMfrequency(g_motorGpio[0], ESC_RATE);
 	gpioSetPWMrange(g_motorGpio[0], 1000000 / ESC_RATE);
 	gpioSetPWMfrequency(g_motorGpio[1], ESC_RATE);
@@ -227,15 +213,10 @@ int main(int argc, char* argv[]) {
 	gpioSetPWMfrequency(g_motorGpio[3], ESC_RATE);
 	gpioSetPWMrange(g_motorGpio[3], 1000000 / ESC_RATE);
 
-	if (!g_dummyUi) {
-		g_ui->init();
-		g_uiThread = new thread(&uiLoop);
-	}
-
 	int result = g_imu.init();
 	if (!result) {
 		cout << "Error starting IMU, error code=" << result << "\n";
-		return -1;
+		return;
 	}
 	g_imu.setRollInv(true);
 	g_imu.setPitchInv(true);
@@ -258,12 +239,11 @@ int main(int argc, char* argv[]) {
 	g_receiver->addLostConnListener(&onLostConn);
 	g_receiver->start();
 
+	g_ui->print("Waiting for START signal\n");
 	auto curTime = chrono::high_resolution_clock::now();
 	auto prevTime = curTime;
 
-	g_ui->print("Waiting for START signal\n");
-
-	while (true) {
+	while (!g_stopping) {
 		curTime = chrono::high_resolution_clock::now();
 		float delta = chrono::duration_cast<chrono::milliseconds>(
 				curTime - prevTime).count() / 1000.0;
@@ -318,19 +298,19 @@ int main(int argc, char* argv[]) {
 			float errdPitch = -angVelocity[1];
 			float errYaw = g_targetYaw - angVelocity[2];
 
-//			// control velocity instead of ang pos when targets == 0
-//			if (target_roll_ == 0 && target_pitch_ == 0) {
-//				err_roll = lin_velocity[1] * 4 - ang_pos[0];
-//				err_pitch = -lin_velocity[0] * 4 - ang_pos[1];
-//			}
+			//			// control velocity instead of ang pos when targets == 0
+			//			if (target_roll_ == 0 && target_pitch_ == 0) {
+			//				err_roll = lin_velocity[1] * 4 - ang_pos[0];
+			//				err_pitch = -lin_velocity[0] * 4 - ang_pos[1];
+			//			}
 
 			float uz = (THROTTLE_P * errThrottle + THROTTLE_D * errdThrottle)
 					* delta;
 			float uroll = ROLLPITCH_P * errRoll + ROLLPITCH_D * errdRoll;
 			float upitch = ROLLPITCH_P * errPitch + ROLLPITCH_D * errdPitch;
 			float uyaw = YAW_P * errYaw;
-//			hover_ += uz;
-//			hover_ = max(min(hover_, kMaxMotor), 0);
+			//			hover_ += uz;
+			//			hover_ = max(min(hover_, kMaxMotor), 0);
 			g_hover = g_receiver->getThrottle() / 100.0;
 			uroll = max(min(uroll, 1 - MAX_MOTOR), -1 + MAX_MOTOR);
 			upitch = max(min(upitch, 1 - MAX_MOTOR), -1 + MAX_MOTOR);
@@ -350,7 +330,43 @@ int main(int argc, char* argv[]) {
 			ss << angVelocity[2];
 			g_logger->write(ss.str());
 		}
-//		this_thread::yield();
+		//		this_thread::yield();
 		this_thread::sleep_for(chrono::milliseconds(1));
+	}
+}
+
+int main(int argc, char* argv[]) {
+	parseArgs(argc, argv);
+	if (g_dummyUi) {
+		g_ui = DummyUI::getInstance();
+	} else {
+		g_ui = NCurseUI::getInstance();
+	}
+	if (g_jsMode) {
+		g_receiver = new Receiver(unique_ptr<Connection>(new JsConnection()),
+				g_ui);
+	} else {
+		g_receiver = new Receiver(
+				unique_ptr<Connection>(new WifiConnection(43123)), g_ui);
+	}
+	if (g_dummyLogger) {
+		g_logger = new DummyLogger();
+	} else {
+		g_logger = new Logger();
+	}
+
+	if (gpioInitialise() < 0) {
+		cout << "Error initializing gpio!" << endl;
+		return (-1);
+	}
+	atexit(onexit);
+
+	if (!g_dummyUi) {
+		g_ui->init();
+		g_uiThread = new thread(&uiLoop);
+	}
+
+	g_mainThread = new thread(&mainLoop);
+	while (g_ui->readch() != 'q') {
 	}
 }

@@ -7,6 +7,10 @@
 
 #include "DummyUI.h"
 
+#include <cstdio>
+
+using namespace std;
+
 DummyUI::DummyUI() {
 }
 
@@ -25,4 +29,8 @@ void DummyUI::updateStat(const std::string& stat) {
 }
 
 void DummyUI::print(const std::string& s) {
+}
+
+char DummyUI::readch() {
+	return getchar();
 }

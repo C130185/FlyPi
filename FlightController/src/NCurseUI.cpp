@@ -46,3 +46,7 @@ void NCurseUI::print(const string& s) {
 	wrefresh(logWin);
 	mtx.unlock();
 }
+
+char NCurseUI::readch() {
+	return getch();
+}

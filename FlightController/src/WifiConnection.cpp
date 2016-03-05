@@ -52,7 +52,7 @@ int WifiConnection::start() { // return -1 if error, else return 0
 void WifiConnection::stop() {
 	if (state == RUNNING) {
 		state = STOPPING;
-		recvThread.detach();
+		recvThread.join();
 	}
 }
 

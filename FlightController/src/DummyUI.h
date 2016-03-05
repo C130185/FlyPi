@@ -19,6 +19,7 @@ public:
 	void end();
 	void updateStat(const std::string& stat);
 	void print(const std::string& s);
+	char readch();
 private:
 	DummyUI();
 };

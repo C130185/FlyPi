@@ -16,6 +16,7 @@ public:
 	virtual void end() = 0;
 	virtual void updateStat(const std::string& stat) = 0;
 	virtual void print(const std::string& s) = 0;
+	virtual char readch() = 0;
 };
 
 #endif /* UI_H_ */
