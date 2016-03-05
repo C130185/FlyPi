@@ -330,8 +330,7 @@ void mainLoop() {
 			ss << angVelocity[2];
 			g_logger->write(ss.str());
 		}
-		//		this_thread::yield();
-		this_thread::sleep_for(chrono::milliseconds(1));
+		this_thread::yield();
 	}
 }
 
