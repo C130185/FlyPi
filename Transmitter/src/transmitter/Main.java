@@ -170,10 +170,10 @@ public class Main implements KeyEventDispatcher {
 				controlDatagram.yaw -= 10;
 				break;
 			case KeyEvent.VK_R:
-				controlDatagram.throttle += 10;
+				controlDatagram.throttle += 5;
 				break;
 			case KeyEvent.VK_F:
-				controlDatagram.throttle -= 10;
+				controlDatagram.throttle -= 5;
 				break;
 			case KeyEvent.VK_SPACE:
 				if (commandDatagram.cmd == 1) {
