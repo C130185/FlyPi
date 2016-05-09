@@ -40,12 +40,13 @@ static const float MAX_MOTOR = 0.8;
 static const float MAX_THROTTLE = 2; // m/s
 static const float MAX_ROLLPITCH = 10; // deg
 static const float MAX_YAW = 45; // deg/s
+static const float ROLLPITCH_THRESHOLD = 0; // deg
 static const float THROTTLE_THRESHOLD = 0.2; // m/s
 static const float THROTTLE_P = 0.2;
 static const float THROTTLE_D = 0.12;
 static const float ROLLPITCH_P = 0.003;
 static const float ROLLPITCH_D = 0.001;
-static const float YAW_P = 0.001;
+static const float YAW_P = 0.003;
 
 bool g_jsMode = false;
 bool g_dummyUi = false;
@@ -82,6 +83,10 @@ void onexit() {
 	delete g_mainThread;
 	delete g_logger;
 	gpioTerminate();
+}
+
+float deg2rad(float deg) {
+	return deg / 180 * M_PI;
 }
 
 void uiLoop() {
@@ -160,7 +165,7 @@ void onStart() {
 	g_state = RUNNING;
 	g_ui->print("Received START signal\n");
 	g_logger->close();
-	g_logger->open("angrate");
+	g_logger->open("all");
 }
 
 void onStop() {
@@ -242,6 +247,7 @@ void mainLoop() {
 	g_ui->print("Waiting for START signal\n");
 	auto curTime = chrono::high_resolution_clock::now();
 	auto prevTime = curTime;
+	int k = 0;
 
 	while (!g_stopping) {
 		curTime = chrono::high_resolution_clock::now();
@@ -261,34 +267,52 @@ void mainLoop() {
 				linAccel[2] = 0;
 			}
 
-			if (abs(angPos[0]) > 10 || abs(angPos[1] > 10)
-					|| g_motorSpeed[0] > 0.25 || g_motorSpeed[1] > 0.25
-					|| g_motorSpeed[2] > 0.25 || g_motorSpeed[3] > 0.25) {
-				g_ui->print("E-STOP: Threshold exceeded\n");
-				g_ui->print(
-						"Roll: " + to_string(angPos[0]) + ", "
-								+ to_string(angVelocity[0]) + "\n");
-				g_ui->print(
-						"Pitch: " + to_string(angPos[1]) + ", "
-								+ to_string(angVelocity[1]) + "\n");
-				g_ui->print(
-						"Yaw: " + to_string(angPos[2]) + ", "
-								+ to_string(angVelocity[2]) + "\n");
-				g_ui->print(
-						"Throttle: " + to_string(linVelocity[2]) + ", "
-								+ to_string(linAccel[2]) + "\n");
-				g_ui->print(
-						"Motors: " + to_string(g_motorSpeed[0]) + ", "
-								+ to_string(g_motorSpeed[1]) + ", "
-								+ to_string(g_motorSpeed[2]) + ", "
-								+ to_string(g_motorSpeed[3]) + "\n");
-				onStop();
-				continue;
+			if (abs(angPos[0]) < ROLLPITCH_THRESHOLD) {
+				angPos[0] = 0;
 			}
 
+			if (abs(angPos[1]) < ROLLPITCH_THRESHOLD) {
+				angPos[1] = 0;
+			}
+
+			// Emergency stop when values too high
+//			if (abs(angPos[0]) > 10 || abs(angPos[1]) > 10
+//					|| g_motorSpeed[0] > 0.7 || g_motorSpeed[1] > 0.7
+//					|| g_motorSpeed[2] > 0.7 || g_motorSpeed[3] > 0.7) {
+//				g_ui->print("E-STOP: Threshold exceeded\n");
+//				g_ui->print(
+//						"Roll: " + to_string(angPos[0]) + ", "
+//								+ to_string(angVelocity[0]) + "\n");
+//				g_ui->print(
+//						"Pitch: " + to_string(angPos[1]) + ", "
+//								+ to_string(angVelocity[1]) + "\n");
+//				g_ui->print(
+//						"Yaw: " + to_string(angPos[2]) + ", "
+//								+ to_string(angVelocity[2]) + "\n");
+//				g_ui->print(
+//						"Throttle: " + to_string(linVelocity[2]) + ", "
+//								+ to_string(linAccel[2]) + "\n");
+//				g_ui->print(
+//						"Motors: " + to_string(g_motorSpeed[0]) + ", "
+//								+ to_string(g_motorSpeed[1]) + ", "
+//								+ to_string(g_motorSpeed[2]) + ", "
+//								+ to_string(g_motorSpeed[3]) + "\n");
+//				onStop();
+//				continue;
+//			}
+
 			g_targetThrottle = g_receiver->getThrottle() / 100.0 * MAX_THROTTLE;
+			if (abs(g_targetThrottle) < THROTTLE_THRESHOLD) {
+				g_targetThrottle = 0;
+			}
 			g_targetRoll = g_receiver->getRoll() / 100.0 * MAX_ROLLPITCH;
+			if (abs(g_targetRoll) < ROLLPITCH_THRESHOLD) {
+				g_targetRoll = 0;
+			}
 			g_targetPitch = g_receiver->getPitch() / 100.0 * MAX_ROLLPITCH;
+			if (abs(g_targetPitch) < ROLLPITCH_THRESHOLD) {
+				g_targetPitch = 0;
+			}
 			g_targetYaw = g_receiver->getYaw() / 100.0 * MAX_YAW;
 			float errThrottle = g_targetThrottle - linVelocity[2];
 			float errdThrottle = -linAccel[2];
@@ -296,39 +320,53 @@ void mainLoop() {
 			float errdRoll = -angVelocity[0];
 			float errPitch = g_targetPitch - angPos[1];
 			float errdPitch = -angVelocity[1];
-			float errYaw = g_targetYaw - angVelocity[2];
-
-			//			// control velocity instead of ang pos when targets == 0
-			//			if (target_roll_ == 0 && target_pitch_ == 0) {
-			//				err_roll = lin_velocity[1] * 4 - ang_pos[0];
-			//				err_pitch = -lin_velocity[0] * 4 - ang_pos[1];
-			//			}
+			float errYaw = -angVelocity[2];
 
 			float uz = (THROTTLE_P * errThrottle + THROTTLE_D * errdThrottle)
 					* delta;
 			float uroll = ROLLPITCH_P * errRoll + ROLLPITCH_D * errdRoll;
 			float upitch = ROLLPITCH_P * errPitch + ROLLPITCH_D * errdPitch;
 			float uyaw = YAW_P * errYaw;
-			//			hover_ += uz;
-			//			hover_ = max(min(hover_, kMaxMotor), 0);
-			g_hover = g_receiver->getThrottle() / 100.0;
+			float tilt = cosf(deg2rad(angPos[0])) * cosf(deg2rad(angPos[1]));
+			g_hover += uz;
+			g_hover = max(min(g_hover, MAX_MOTOR), 0);
 			uroll = max(min(uroll, 1 - MAX_MOTOR), -1 + MAX_MOTOR);
 			upitch = max(min(upitch, 1 - MAX_MOTOR), -1 + MAX_MOTOR);
 			uyaw = max(min(uyaw, 1 - MAX_MOTOR), -1 + MAX_MOTOR);
-			g_motorSpeed[0] = max(min(g_hover + uroll - upitch + uyaw, 1), 0);
-			g_motorSpeed[1] = max(min(g_hover - uroll - upitch - uyaw, 1), 0);
-			g_motorSpeed[2] = max(min(g_hover - uroll + upitch + uyaw, 1), 0);
-			g_motorSpeed[3] = max(min(g_hover + uroll + upitch - uyaw, 1), 0);
+			g_motorSpeed[0] = max(
+					min((g_hover + uroll - upitch + uyaw) / tilt, 1), 0);
+			g_motorSpeed[1] = max(
+					min((g_hover - uroll - upitch - uyaw) / tilt, 1), 0);
+			g_motorSpeed[2] = max(
+					min((g_hover - uroll + upitch + uyaw) / tilt, 1), 0);
+			g_motorSpeed[3] = max(
+					min((g_hover + uroll + upitch - uyaw) / tilt, 1), 0);
 			gpioPWM(g_motorGpio[0], g_motorSpeed[0] * 1000 + 1000);
 			gpioPWM(g_motorGpio[1], g_motorSpeed[1] * 1000 + 1000);
 			gpioPWM(g_motorGpio[2], g_motorSpeed[2] * 1000 + 1000);
 			gpioPWM(g_motorGpio[3], g_motorSpeed[3] * 1000 + 1000);
 
-			stringstream ss;
-			ss << angVelocity[0] << ",";
-			ss << angVelocity[1] << ",";
-			ss << angVelocity[2];
-			g_logger->write(ss.str());
+			if (k % 4 == 0) {
+				stringstream ss;
+				ss << angPos[0] << ",";
+				ss << angPos[1] << ",";
+				ss << angPos[2] << ",";
+				ss << angVelocity[0] << ",";
+				ss << angVelocity[1] << ",";
+				ss << angVelocity[2] << ",";
+				ss << linVelocity[0] << ",";
+				ss << linVelocity[1] << ",";
+				ss << linVelocity[2] << ",";
+				ss << linAccel[0] << ",";
+				ss << linAccel[1] << ",";
+				ss << linAccel[2] << ",";
+				ss << g_motorSpeed[0] << ",";
+				ss << g_motorSpeed[1] << ",";
+				ss << g_motorSpeed[2] << ",";
+				ss << g_motorSpeed[3];
+				g_logger->write(ss.str());
+			}
+			k++;
 		}
 		this_thread::yield();
 	}
