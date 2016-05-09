@@ -25,7 +25,7 @@ array<float, 3> IMU::getAngularPos() {
 }
 
 array<float, 3> IMU::getAngularVelocity() {
-	return angVelocity;
+	return angVelocitySmoothed;
 }
 
 array<float, 3> IMU::getLinVelocity() {
@@ -241,15 +241,13 @@ inline int IMU::processData() {
 	accelGSmoothed[1] = accelGMovingsum[1] / accelGSamples.size();
 	accelGSmoothed[2] = accelGMovingsum[2] / accelGSamples.size();
 
-	accelOrientation[0] = rad2deg(
-			atan2(accelGSmoothed[1], accelGSmoothed[2]))
+	accelOrientation[0] = rad2deg(atan2(accelGSmoothed[1], accelGSmoothed[2]))
 			+ zeroAngOffset[0];
 	accelOrientation[1] = rad2deg(
 			atan2(-accelGSmoothed[0],
 					sqrt(
 							accelGSmoothed[1] * accelGSmoothed[1]
-									+ accelGSmoothed[2]
-											* accelGSmoothed[2])))
+									+ accelGSmoothed[2] * accelGSmoothed[2])))
 			+ zeroAngOffset[1];
 
 	result = i2cReadI2CBlockData(hGyro, 0xA8, buf, 6);
@@ -282,19 +280,14 @@ inline int IMU::processData() {
 		angVeloMovingsum[2] -= sample[2];
 		angVeloTime -= sample[3];
 	}
-	angVelocitySmoothed[0] = angVeloMovingsum[0]
-			/ angVeloSamples.size();
-	angVelocitySmoothed[1] = angVeloMovingsum[1]
-			/ angVeloSamples.size();
-	angVelocitySmoothed[2] = angVeloMovingsum[2]
-			/ angVeloSamples.size();
+	angVelocitySmoothed[0] = angVeloMovingsum[0] / angVeloSamples.size();
+	angVelocitySmoothed[1] = angVeloMovingsum[1] / angVeloSamples.size();
+	angVelocitySmoothed[2] = angVeloMovingsum[2] / angVeloSamples.size();
 
 	float factor = delta;
-	angPos[0] = (1 - factor)
-			* (angPos[0] + angVelocitySmoothed[0] * delta)
+	angPos[0] = (1 - factor) * (angPos[0] + angVelocitySmoothed[0] * delta)
 			+ factor * accelOrientation[0];
-	angPos[1] = (1 - factor)
-			* (angPos[1] + angVelocitySmoothed[1] * delta)
+	angPos[1] = (1 - factor) * (angPos[1] + angVelocitySmoothed[1] * delta)
 			+ factor * accelOrientation[1];
 
 //	gravity_[0] = sin(deg2rad(angular_pos_[1])) * kGravity;
@@ -306,10 +299,8 @@ inline int IMU::processData() {
 //	gravity_[2] = sqrt(tmp);
 
 	gravity[0] = sin(deg2rad(angPos[1])) * GRAVITY;
-	gravity[1] = -cos(deg2rad(angPos[1])) * sin(deg2rad(angPos[0]))
-			* GRAVITY;
-	gravity[2] = cos(deg2rad(angPos[1])) * cos(deg2rad(angPos[0]))
-			* GRAVITY;
+	gravity[1] = -cos(deg2rad(angPos[1])) * sin(deg2rad(angPos[0])) * GRAVITY;
+	gravity[2] = cos(deg2rad(angPos[1])) * cos(deg2rad(angPos[0])) * GRAVITY;
 
 	result = i2cReadI2CBlockData(hAccelMag, 0x88, buf, 6);
 	if (result < 0)
@@ -333,9 +324,9 @@ inline int IMU::processData() {
 							+ bz * sin(theta) * cos(phi)) * inverted[2]
 					+ zeroAngOffset[2]);
 
-	linAccel[0] = -accelGSmoothed[0] * GRAVITY - gravity[0];
-	linAccel[1] = -accelGSmoothed[1] * GRAVITY - gravity[1];
-	linAccel[2] = accelGSmoothed[2] * GRAVITY - gravity[2];
+	linAccel[0] = (-accelGSmoothed[0] * GRAVITY - gravity[0]) * inverted[0];
+	linAccel[1] = (-accelGSmoothed[1] * GRAVITY - gravity[1]) * inverted[1];
+	linAccel[2] = (accelGSmoothed[2] * GRAVITY - gravity[2]) * inverted[2];
 
 	if (abs(linAccel[0]) < ACCEL_THRESHOLD)
 		sample[0] = 0;
